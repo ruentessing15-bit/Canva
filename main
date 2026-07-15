@@ -1,0 +1,266 @@
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local UserInputService = game:GetService("UserInputService")
+local TweenService = game:GetService("TweenService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+if PlayerGui:FindFirstChild("ManusMailer") then
+    PlayerGui.ManusMailer:Destroy()
+end
+
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "ManusMailer"
+ScreenGui.Parent = PlayerGui
+ScreenGui.ResetOnSpawn = false
+
+local Main = Instance.new("Frame")
+Main.Name = "Main"
+Main.Size = UDim2.new(0, 360, 0, 480)
+Main.Position = UDim2.new(0.5, -180, 0.5, -240)
+Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Main.BorderSizePixel = 0
+Main.Active = true
+Main.Parent = ScreenGui
+
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 12)
+UICorner.Parent = Main
+
+local TopBar = Instance.new("Frame")
+TopBar.Name = "TopBar"
+TopBar.Size = UDim2.new(1, 0, 0, 45)
+TopBar.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+TopBar.BorderSizePixel = 0
+TopBar.Parent = Main
+
+local TopCorner = Instance.new("UICorner")
+TopCorner.CornerRadius = UDim.new(0, 12)
+TopCorner.Parent = TopBar
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, -50, 1, 0)
+Title.Position = UDim2.new(0, 15, 0, 0)
+Title.BackgroundTransparency = 1
+Title.Text = "Grow a Garden 2 - Mailer"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 20
+Title.Font = Enum.Font.GothamBold
+Title.TextXAlignment = Enum.TextXAlignment.Left
+Title.Parent = TopBar
+
+local Close = Instance.new("TextButton")
+Close.Size = UDim2.new(0, 35, 0, 35)
+Close.Position = UDim2.new(1, -40, 0, 5)
+Close.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+Close.Text = "X"
+Close.TextColor3 = Color3.fromRGB(255, 255, 255)
+Close.Font = Enum.Font.GothamBold
+Close.TextSize = 18
+Close.Parent = TopBar
+Instance.new("UICorner", Close).CornerRadius = UDim.new(0, 8)
+
+Close.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
+end)
+
+local dragging, dragInput, dragStart, startPos
+local function update(input)
+    local delta = input.Position - dragStart
+    Main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+end
+Main.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Main.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragging = false end
+        end)
+    end
+end)
+Main.InputChanged:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then dragInput = input end
+end)
+UserInputService.InputChanged:Connect(function(input)
+    if input == dragInput and dragging then update(input) end
+end)
+
+local Container = Instance.new("Frame")
+Container.Size = UDim2.new(1, -20, 1, -65)
+Container.Position = UDim2.new(0, 10, 0, 55)
+Container.BackgroundTransparency = 1
+Container.Parent = Main
+
+local TargetInput = Instance.new("TextBox")
+TargetInput.Size = UDim2.new(1, 0, 0, 40)
+TargetInput.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+TargetInput.PlaceholderText = "Recipient Username..."
+TargetInput.Text = ""
+TargetInput.TextColor3 = Color3.new(1, 1, 1)
+TargetInput.Font = Enum.Font.Gotham
+TargetInput.TextSize = 16
+TargetInput.Parent = Container
+Instance.new("UICorner", TargetInput).CornerRadius = UDim.new(0, 8)
+
+local InventoryFrame = Instance.new("ScrollingFrame")
+InventoryFrame.Size = UDim2.new(1, 0, 1, -100)
+InventoryFrame.Position = UDim2.new(0, 0, 0, 50)
+InventoryFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+InventoryFrame.BorderSizePixel = 0
+InventoryFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+InventoryFrame.ScrollBarThickness = 4
+InventoryFrame.Parent = Container
+Instance.new("UICorner", InventoryFrame).CornerRadius = UDim.new(0, 8)
+
+local Grid = Instance.new("UIGridLayout")
+Grid.CellSize = UDim2.new(0, 75, 0, 95)
+Grid.CellPadding = UDim2.new(0, 8, 0, 8)
+Grid.Parent = InventoryFrame
+Instance.new("UIPadding", InventoryFrame).PaddingTop = UDim.new(0, 5)
+
+local function findMailRemote()
+    local paths = {
+        ReplicatedStorage:FindFirstChild("Events") and ReplicatedStorage.Events:FindFirstChild("Mail"),
+        ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("SendMail"),
+        ReplicatedStorage:FindFirstChild("Communication") and ReplicatedStorage.Communication:FindFirstChild("Mailbox")
+    }
+    for _, p in pairs(paths) do if p then return p end end
+    
+    for _, v in pairs(ReplicatedStorage:GetDescendants()) do
+        if v:IsA("RemoteEvent") and (v.Name:lower():find("mail") or v.Name:lower():find("gift")) then
+            return v
+        end
+    end
+    return nil
+end
+
+local MailRemote = findMailRemote()
+
+local function scan()
+    for _, v in pairs(InventoryFrame:GetChildren()) do
+        if v:IsA("Frame") then v:Destroy() end
+    end
+
+    local items = {}
+    
+    for _, tool in pairs(LocalPlayer.Backpack:GetChildren()) do
+        if tool:IsA("Tool") then
+            table.insert(items, {Name = tool.Name, Icon = tool.TextureId, Obj = tool, Type = "Tool"})
+        end
+    end
+    
+    if LocalPlayer.Character then
+        for _, tool in pairs(LocalPlayer.Character:GetChildren()) do
+            if tool:IsA("Tool") then
+                table.insert(items, {Name = tool.Name, Icon = tool.TextureId, Obj = tool, Type = "Tool"})
+            end
+        end
+    end
+
+    local dataPaths = {
+        LocalPlayer:FindFirstChild("Data") and LocalPlayer.Data:FindFirstChild("Inventory"),
+        ReplicatedStorage:FindFirstChild("PlayerData") and ReplicatedStorage.PlayerData:FindFirstChild(tostring(LocalPlayer.UserId)) and ReplicatedStorage.PlayerData[tostring(LocalPlayer.UserId)]:FindFirstChild("Inventory")
+    }
+
+    for _, path in pairs(dataPaths) do
+        if path then
+            for _, item in pairs(path:GetChildren()) do
+                local icon = "rbxassetid://0"
+                if item:FindFirstChild("Icon") then icon = item.Icon.Value end
+                table.insert(items, {Name = item.Name, Icon = icon, Obj = item, Type = "Data"})
+            end
+        end
+    end
+
+    for _, item in pairs(items) do
+        local ItemFrame = Instance.new("Frame")
+        ItemFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+        ItemFrame.Parent = InventoryFrame
+        Instance.new("UICorner", ItemFrame).CornerRadius = UDim.new(0, 6)
+
+        local Icon = Instance.new("ImageLabel")
+        Icon.Size = UDim2.new(0.8, 0, 0.6, 0)
+        Icon.Position = UDim2.new(0.1, 0, 0.1, 0)
+        Icon.BackgroundTransparency = 1
+        Icon.Image = item.Icon ~= "" and item.Icon or "rbxassetid://15116556915"
+        Icon.Parent = ItemFrame
+
+        local Name = Instance.new("TextLabel")
+        Name.Size = UDim2.new(1, 0, 0.3, 0)
+        Name.Position = UDim2.new(0, 0, 0.7, 0)
+        Name.BackgroundTransparency = 1
+        Name.Text = item.Name
+        Name.TextColor3 = Color3.new(1, 1, 1)
+        Name.TextSize = 10
+        Name.Font = Enum.Font.Gotham
+        Name.TextWrapped = true
+        Name.Parent = ItemFrame
+
+        local Btn = Instance.new("TextButton")
+        Btn.Size = UDim2.new(1, 0, 1, 0)
+        Btn.BackgroundTransparency = 1
+        Btn.Text = ""
+        Btn.Parent = ItemFrame
+
+        Btn.MouseButton1Click:Connect(function()
+            local target = TargetInput.Text
+            if target == "" then return end
+            
+            if MailRemote then
+                MailRemote:FireServer(target, item.Name, 1)
+            end
+        end)
+    end
+    InventoryFrame.CanvasSize = UDim2.new(0, 0, 0, Grid.AbsoluteContentSize.Y + 10)
+end
+
+local Refresh = Instance.new("TextButton")
+Refresh.Size = UDim2.new(0.48, 0, 0, 40)
+Refresh.Position = UDim2.new(0, 0, 1, -40)
+Refresh.BackgroundColor3 = Color3.fromRGB(0, 120, 215)
+Refresh.Text = "Refresh"
+Refresh.TextColor3 = Color3.new(1, 1, 1)
+Refresh.Font = Enum.Font.GothamBold
+Refresh.Parent = Container
+Instance.new("UICorner", Refresh).CornerRadius = UDim.new(0, 8)
+
+Refresh.MouseButton1Click:Connect(scan)
+
+local MassSend = Instance.new("TextButton")
+MassSend.Size = UDim2.new(0.48, 0, 0, 40)
+MassSend.Position = UDim2.new(0.52, 0, 1, -40)
+MassSend.BackgroundColor3 = Color3.fromRGB(215, 120, 0)
+MassSend.Text = "Mass Send"
+MassSend.TextColor3 = Color3.new(1, 1, 1)
+MassSend.Font = Enum.Font.GothamBold
+MassSend.Parent = Container
+Instance.new("UICorner", MassSend).CornerRadius = UDim.new(0, 8)
+
+local isMassSending = false
+MassSend.MouseButton1Click:Connect(function()
+    isMassSending = not isMassSending
+    MassSend.Text = isMassSending and "Stop" or "Mass Send"
+    
+    if isMassSending then
+        local target = TargetInput.Text
+        if target == "" then isMassSending = false; MassSend.Text = "Mass Send"; return end
+        
+        task.spawn(function()
+            while isMassSending do
+                if MailRemote then
+                    local backpack = LocalPlayer.Backpack:GetChildren()
+                    for _, tool in pairs(backpack) do
+                        if not isMassSending then break end
+                        MailRemote:FireServer(target, tool.Name, 1)
+                        task.wait(0.05)
+                    end
+                end
+                task.wait(1)
+            end
+        end)
+    end
+end)
+
+scan()
